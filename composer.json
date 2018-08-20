@@ -1,0 +1,8 @@
+{
+    "name": "mikelking/pyramid",
+    "description": "Vagrant bundle.",
+    "keywords": ["vagrant", "virtualbox", "ansible"],
+    "type": "vagrant-bundle",
+    "homepage": "https://www.jafdip.com/",
+    "license": "BSD-3"
+}
