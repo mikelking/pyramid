@@ -1,0 +1,73 @@
+---
+- name: configure server
+  hosts: lcl
+  gather_facts: no
+  become: yes
+
+###############################################################################
+  vars:
+    NODEJS_VERSION: "10"
+    UBUNTU_VERSION: "xenial"
+###############################################################################
+  tasks:
+
+#==============================================================================
+# System
+#==============================================================================
+
+  - name: add signing keys
+    apt_key:
+      url: '{{ item }}'
+      state: present
+    with_items:
+    - 'https://deb.nodesource.com/gpgkey/nodesource.gpg.key' #nodejs
+#    - 'https://dl.yarnpkg.com/debian/pubkey.gpg' #yarn - npm replacement
+
+  - name: add package repositories
+    apt_repository:
+      repo: '{{ item }}'
+      state: present
+      update_cache: yes
+    with_items:
+    - 'deb https://deb.nodesource.com/node_{{ NODEJS_VERSION }}.x {{ UBUNTU_VERSION }} main'
+#    - 'deb https://dl.yarnpkg.com/debian/ stable main' #yarn - npm replacement
+
+# Ansible does not auto remove items and it appears that you may need to tell it to remove them prior to upgrading in some cases
+#  - name: Remove stale items
+#    apt:
+#      name: '{{ item }}'
+#      state: absent
+#      autoclean: yes
+#       autopurge: yes
+#       sudo: yes
+#    with_items:
+#       - nodejs
+#       - npm
+#      - gulp
+#       - gulp-watch
+#       - jslint
+
+  - name: Install nodaejs LTS
+    apt:
+      name: nodejs
+      state: present
+      update_cache: yes
+      upgrade: safe
+      autoclean: yes
+
+#  - name: symbolic link "node" invocation
+#    file:
+#      src: /usr/bin/nodejs
+#      dest: /usr/local/bin/node
+#      state: link
+
+#  - name: install global nodejs packages
+#    npm:
+#      name: '{{ item }}'
+#      state: present
+#      global: yes
+#    with_items:
+#    - gulp
+#    - gulp-watch
+#    - jslint
+

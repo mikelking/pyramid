@@ -1,0 +1,541 @@
+---
+- name: configure server
+  hosts: lcl
+  gather_facts: no
+  become: yes
+
+############################### YAML Vars ###############################
+  vars:
+    NODEJS_VERSION: "10"
+    UBUNTU_VERSION: "xenial"
+    db_dump_file: wpdb_min.sql.gz
+
+    users:
+    - { username: 'vagrant', password: 'vagrant', hash: '$6$MASPkYql$i4NBItiAV9jrGoSTkpW.VHhK.VhFswC1sb6Jtu9Us.sB.XlBDKKTNtNl7uJ6RaRqLV4bhZkE5EFw9ea1pOKDN/'}
+    - { username: 'ubuntu', password: 'ubuntu', hash: '$6$F0NHzeDW$N1kV3k5JERIKSUgZiQwqXlUq0yS8nhO16JmthwMkqk/Bh3SqJHQcJnr81TNTXpUQbPqI4eesmWezo5jMaO6XS/'}
+
+    doc_root: /data/www/pyramid.local
+    log_path: /vagrant/.logs
+    multi_sites:
+    - { id: 1, domain: 'pyramid.local' }
+    blogs:
+    - { id: 1, url: 'pyramid.local', image_domain: 'http://olivent.net', image_multisite: true }
+    - { id: 2, url: 'ocom.pyramid.local', image_domain: 'https://www.olivent.com/', image_multisite: true }
+    - { id: 3, url: 'jafdip.pyramid.local', image_domain: 'https://www.jafdip.com/', image_multisite: true }
+    - { id: 4, url: 'cm.pyramid.local', image_domain: 'https://www.team329.com/', image_multisite: true }
+    - { id: 5, url: 'frl.pyramid.local', image_domain: 'https://www.mikelking.com/', image_multisite: true }
+    - { id: 6, url: 'bnb.pyramid.local', image_domain: 'https://www.bsdnews.com/', image_multisite: true }
+    - { id: 7, url: 'bhu.pyramid.local', image_domain: 'https://blog.robowarsurvival.com', image_multisite: true }
+
+
+
+############################### Deployment Keys ###############################
+    deployment_keys:
+    - name: mqresources_rsa.pub
+      mode: '0644'
+      key: |
+        ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCfG70rUnaB9gcg/0hsVzMZq9rRULYRh6LdQQGA+K2wh1uxsDcCVbdWL0gKm+U3ioeW9wvV7U7zF1ZaTenbMlgs8ttNv362uah0+jSM05X3cRZ/o8pA+KJ8p9YLtUQyKrJn0xiITKYVdP8DgGukt5v8wgzI2tKQgveYGgQ/la9dac74KU/bOhauNStzmBZOynEiAYZt+3fviLp2qvA4itTChy9pRjCXSJiZKfiNn4tRIqfTbo0piixdUcfxXn98hoegc1wQt/04FUF0oFLbr6SFh+lK9U/wZYaIdeUcY1BDaxVEblp3c4ohXnQzKvVwVD8EE9rkwFzhfw3ZFaVs9qyx ansible@pyramid.local
+    - name: mqresources_rsa
+      mode: '0600'
+      key: |
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIEowIBAAKCAQEAnxu9K1J2gfYHIP9IbFczGava0VC2EYei3UEBgPitsIdbsbA3
+        AlW3Vi9ICpvlN4qHlvcL1e1O8xdWWk3p2zJYLPLbTb9+trmodPo0jNOV93EWf6PK
+        QPiifKfWC7VEMiqyZ9MYiEymFXT/A4BrpLeb/MIMyNrSkIL3mBoEP5WvXWnO+ClP
+        2zoWrjUrc5gWTspxIgGGbft374i6dqrwOIrUwocvaUYwl0iYmSn4jZ+LUSKn026N
+        KYosXVHH8V5/fIaHoHNcELf9OBVBdKBS26+khYfpSvVP8GWGiHXlHGNQQ2sVRG5a
+        d3OKIV50Myr1cFQ/BBPa5MBc4X8N2RWlbPassQIDAQABAoIBAQCcFfZKHaesbtMn
+        h8hgoFq9AF61oNw77jfTngX/o/Wgi+lkM16Dp9snbVLbNXx0NC435ztxLlCZIXfR
+        N0YHhygBUG3bo9SHJTMhLqOG07r297X+mYu8mS2t5GiTK8wu+rvyJqCWdbsoqZHS
+        uZTgDk+0chlgoWqX4iNKz5sDVbCnja0rwi9sxYAzAeZ7muMxx3Lq/TUEM0S6OUaG
+        BbYmwP+nnC31dt0o83DiCPMwITWWVRBGjMOaIZmHAkSeXIYg/eoW8o1vGm5/x6q3
+        b37Dz25EffmxDb8VriZpRewKyqFzHKsPR5/iFcfTXRcYAuvL5Ao9DEIFYfbSH4qH
+        9KtlDCXBAoGBAM5y40Kqm2e93f00570odhrjkBylV2+iCuXEIYeEMQQzEe5Vwr/b
+        3HuZGW9LdGV1Kn8KPl/qzDdeVu1OiDNVQvUOp8ZEeQOq7QLIfNIKyOP5BukbpCPS
+        68p8BOzFBhyZPWFNejM59EiiQpNkV2+zGVgJDcz6xIer3OGq/yyq2s0lAoGBAMVM
+        DJ7t3V6VWvMRn/7jCrfOF1QFe2Xq6Men3VBBEnuFnZeF8rLAa82pC9lB1R4Wqr36
+        jwwazh/m3eI7HR/WZpWfxuKTsEaE9kFBl4p8lto1RNm1UOKUt/JEfP1vZ1i4gTOK
+        9KqR+BKueR92LsFDrGBDSryZM0p/frtOFsbkEVmdAoGAPXcHInoY+rIUvaZauH6r
+        ayYFagHwHlRoWjAiq244CcAKvqLZ8LVM15+lavVUGkDf/iLWn0gQtQtpZg3TjzT7
+        UmqimO0Z+nWRSxrVztNXLEigPhb0r5XEjeyOqs+eGjWliKrAjy/aAyYMHEXrol34
+        VbWcXkLq8FnC0Y1Pm8Tij+ECgYAfVgHXKD51rFEitBTuXc8w/Fm2LZy4xkOsmlvL
+        SFqQJduu2kZ+35L/ui64lf0sZzs9K1OW/5bneDqbmPn6OYpXj2X+TKi9upaGLM3N
+        4BXxmG5UCblME4TXxMr5Ub1fWQakUhikEsUM6oswVQv+BCqXq3huVgLQfUl6pF93
+        vXeH/QKBgCDYlRa8nQklUsK+8+qwBorb8r3DTpzneXp7eC2ncHzBK33CdfEfH8KW
+        QVUm1xqq34mAa7zwnbufH1iEZU2yVAyfKYh6Ol0tLJg1UJtypMebvho0QkN8dSNS
+        XjI3oQLg1eyv1DNMc3RgqmcMNkUIcbyr+czs1LghhQOGUNeRtIxa
+        -----END RSA PRIVATE KEY-----
+
+############################### Main System ###############################
+  tasks:
+
+############################### Pkg Keys & Repos ###############################
+  - name: add signing keys
+    apt_key:
+      url: '{{ item }}'
+      state: present
+    with_items:
+    - 'https://packagecloud.io/gpg.key' #blackfire
+    - 'https://packagecloud.io/phalcon/stable/gpgkey' #phalcon
+    - 'https://packagecloud.io/varnishcache/varnish51/gpgkey' #varnish
+    - 'https://deb.nodesource.com/gpgkey/nodesource.gpg.key' #nodejs
+#    - 'https://dl.yarnpkg.com/debian/pubkey.gpg' #yarn - npm replacement
+
+  - name: add package repositories
+    apt_repository:
+      repo: '{{ item }}'
+      state: present
+      update_cache: yes
+    with_items:
+    - 'deb http://packages.blackfire.io/debian any main' #blackfire
+    - 'deb https://packagecloud.io/phalcon/stable/ubuntu/ {{ UBUNTU_VERSION }} main' #phalcon
+    - 'deb https://packagecloud.io/varnishcache/varnish51/ubuntu/ {{ UBUNTU_VERSION }} main' #varnish
+    - 'deb https://deb.nodesource.com/node_{{ NODEJS_VERSION }}.x {{ UBUNTU_VERSION }} main'
+#    - 'deb https://dl.yarnpkg.com/debian/ stable main' #yarn - npm replacement
+
+############################### Nodejs & NPM ###############################
+#  - name: Uninstall npm
+#    npm:
+#       name: '{{ item }}'
+#       state: absent
+#       autoclean: yes
+#    with_items:
+#       - npm
+#       - gulp
+#       - gulp-watch
+#       - jslint
+
+#  - name: Uninstall nodejs
+#    apt:
+#       name: '{{ item }}'
+#       state: absent
+#       autoclean: yes
+#    with_items:
+#       - nodejs
+
+# Installing node automatically installed npm.
+  - name: Install nodaejs LTS
+    apt:
+      name: nodejs
+      state: latest
+      update_cache: yes
+      autoclean: yes
+    become: yes
+
+  - name: symbolic link "node" invocation
+    file:
+      src: /usr/bin/nodejs
+      dest: /usr/local/bin/node
+      state: link
+
+#    yarn is a npm alternative but uses lock files
+  - name: install global nodejs packages
+    npm:
+      name: '{{ item }}'
+      state: present
+      global: yes
+    with_items:
+    - gulp
+    - gulp-watch
+    - jslint
+    - npm-cache
+    - babel-cli
+    - babel-core
+    become: yes
+
+############################### Install & Setup Core ###############################
+  - name: install packages
+    apt:
+      name: '{{ item }}'
+      state: present
+      update_cache: no
+    with_items:
+    - apache2
+    - apache2-utils
+    - blackfire-agent
+    - blackfire-php
+    - git
+    - htop
+    - imagemagick
+    - libapache2-mod-php7.0
+    - libsass0
+    - mariadb-server
+    - mariadb-client
+    - memcached
+    - php7.0-bcmath
+    - php7.0-cli
+    - php7.0-curl
+    - php7.0-gd
+    - php7.0-intl
+    - php7.0-json
+    - php7.0-mbstring
+    - php7.0-mcrypt
+    - php7.0-mysql
+    - php7.0-phalcon
+    - php7.0-readline
+    - php7.0-sqlite3
+    - php7.0-xsl
+    - php-imagick
+    - php-memcached
+    - php-xdebug
+    - python
+    - python-jenkins
+    - python-lxml
+    - python-mysqldb
+    - python-simplejson
+    - rabbitmq-server
+    - ruby-sass
+    - supervisor
+    - vim
+    - zip
+
+  - name: disable xdebug for cli
+    file:
+      dest: /etc/php/7.0/cli/conf.d/20-xdebug.ini
+      state: absent
+
+  - name: fetch phar packages
+    get_url:
+      url: '{{ item.url }}'
+      dest: '/usr/local/bin/{{ item.name }}'
+      owner: root
+      group: root
+      mode: 0755
+    with_items:
+    - { name: 'composer', url: 'https://getcomposer.org/download/1.5.2/composer.phar' }
+    - { name: 'wp', url: 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar' }
+    - { name: 'phpunit', url: 'https://phar.phpunit.de/phpunit-4.8.phar' }
+    - { name: 'behat', url: 'https://github.com/Behat/Behat/releases/download/v3.0.15/behat.phar' }
+    - { name: 'phpdoc', url: 'http://phpdoc.org/phpDocumentor.phar' }
+    - { name: 'phpcs', url: 'https://squizlabs.github.io/PHP_CodeSniffer/phpcs.phar' }
+    - { name: 'phpcbf', url: 'https://squizlabs.github.io/PHP_CodeSniffer/phpcbf.phar' }
+
+############################### User Access Setup ###############################
+  - name: allow password authentication on ssh
+    lineinfile:
+      backrefs: yes
+      path: /etc/ssh/sshd_config
+      regexp: '^Passwopyramiduthentication'
+      line: 'Passwopyramiduthentication yes'
+    when: '"vagrant" in group_names'
+    register: ssh
+
+  - name: reload sshd configuration
+    command: /etc/init.d/ssh reload
+    when: ssh.changed
+
+  - name: setup users
+    user:
+      name: '{{ item.username }}'
+      password: '{{ item.hash }}'
+      shell: /bin/bash
+      groups: adm,audio,cdrom,dialout,dip,floppy,lxd,netdev,plugdev,sudo,video,www-data
+      append: yes
+      generate_ssh_key: yes
+      state: present
+    with_items: '{{ users }}'
+    when: "'vagrant' in group_names"
+
+  - name: allow users to sudo without password
+    lineinfile:
+      dest: /etc/sudoers.d/{{ item.username }}
+      create: yes
+      owner: root
+      group: root
+      mode: 0440
+      line: '{{ item.username }} ALL=(ALL) NOPASSWD:ALL'
+    with_items: '{{ users }}'
+    when: "'vagrant' in group_names"
+
+  - name: create .ssh directory
+    file:
+      path: ~/.ssh
+      mode: 0700
+      state: directory
+
+  - name: copy deployment keys
+    copy:
+      dest: '~/.ssh/{{ item.name }}'
+      mode: '{{ item.mode }}'
+      content: '{{ item.key }}'
+    with_items: '{{ deployment_keys }}'
+
+  - name: add configuration files
+    template:
+      src: '{{ item.src }}'
+      dest: '{{ item.dest }}'
+    with_items:
+    - { src: 'wordpress-variables.sh', dest: '/etc/profile.d/wordpress-variables.sh' }
+    - { src: 'hosts', dest: '/etc/ansible/hosts' }
+
+############################### Services ###############################
+
+#==============================================================================
+# Vim
+#==============================================================================
+  - name: add vim settings
+    lineinfile:
+      dest: /etc/vim/vimrc
+      line: '{{ item }}'
+      state: present
+    with_items:
+    - 'set showcmd'
+    - 'set showmatch'
+    - 'set ignorecase'
+    - 'set smartcase'
+    - 'set incsearch'
+    - 'set hidden'
+    - 'set mouse=a'
+    - 'set hlsearch'
+
+############################### StartUp services ###############################
+  - name: start services
+    service:
+      name: '{{ item }}'
+      enabled: true
+      state: started
+    with_items:
+    - apache2
+    - mysql
+    - rabbitmq-server
+    - supervisor
+
+# No longer needed since hosting provider changed to 45Air
+#  - name: create directories to simulate nas
+#    file:
+#      dest: '/nas/content/live/rdigest/wp-content/uploads/sites/{{ item.id }}'
+#      owner: www-data
+#      group: www-data
+#      mode: g+ws
+#      state: directory
+#    with_items: '{{ blogs }}'
+
+
+#==============================================================================
+# Apache
+#==============================================================================
+  - name: add available sites to apache
+    template:
+      src: vhost.apache
+      dest: /etc/apache2/sites-available/{{ item.url }}.conf
+    with_items: '{{ blogs }}'
+    notify: restart apache
+
+  - name: set default domain name
+    copy:
+      dest: '/etc/apache2/conf-available/fqdn.conf'
+      content: 'ServerName localhost'
+
+  - name: enable apache service
+    service:
+      name: apache2
+      enabled: yes
+      state: started
+
+  - name: install apache modules
+    apache2_module:
+      name: '{{ item }}'
+      state: present
+    with_items:
+    - proxy
+    - proxy_http
+    - rewrite
+    - vhost_alias
+
+  - name: disable default site
+    file:
+      dest: /etc/apache2/sites-enabled/000-default.conf
+      state: absent
+    notify: restart apache
+
+  - name: enable sites
+    file:
+      src: ../sites-available/{{ item.url }}.conf
+      dest: /etc/apache2/sites-enabled/{{ item.url }}.conf
+      force: yes
+      state: link
+    with_items: '{{ blogs }}'
+    notify: restart apache
+
+  - name: enable fqdn.conf
+    file:
+      src: ../conf-available/fqdn.conf
+      dest: /etc/apache2/conf-enabled/fqdn.conf
+      force: yes
+      state: link
+    notify: restart apache
+
+  - name: build hosts file
+    lineinfile:
+      dest: /etc/hosts
+      regexp: ^127.0.0.1 {{ item.url }}$
+      line: 127.0.0.1 {{ item.url }}
+      state: present
+    with_items: '{{ blogs }}'
+    when: "'vagrant' in group_names"
+
+#==============================================================================
+# PHP
+#==============================================================================
+
+  - name: configure xdebug
+    lineinfile:
+      name: /etc/php/7.0/mods-available/xdebug.ini
+      line: '{{ item }}'
+    with_items:
+    - xdebug.remote_enable=1
+    - xdebug.remote_connect_back=1
+    notify: restart apache
+
+#==============================================================================
+# MySQL
+#==============================================================================
+
+  - name: add users to mysql
+    mysql_user:
+      user: '{{ item.username }}'
+      host: '%'
+      password: '{{ item.password }}'
+      encrypted: no
+      priv: '*.*:ALL,GRANT'
+      state: present
+    with_items: '{{ users }}'
+
+  - name: create .my.cnf files
+    template:
+      src: my.conf
+      dest: /home/{{ item.username }}/.my.cnf
+    with_items: '{{ users }}'
+    when: "'vagrant' in group_names"
+
+  - name: open access to mysql
+    lineinfile:
+      name: /etc/mysql/mariadb.conf.d/50-server.cnf
+      regexp: '^bind-address'
+      line: 'bind-address = 0.0.0.0'
+    notify: restart mysql
+    when: "'vagrant' in group_names"
+
+#------------------------------------------------------------------------------
+  - name: stat checksum file
+    stat:
+      path: /tmp/rdnap_checksum.txt
+    register: stat_checksum
+
+  - name: stat database dump
+    stat:
+      path: '{{ db_dump_file }}'
+    register: stat_db
+
+  - name: drop database schema
+    mysql_db:
+      name: rdnap
+      state: absent
+    when: stat_checksum.stat.exists and stat_db.stat.exists and stat_db.stat.checksum != lookup('file', '/tmp/rdnap_checksum.txt')
+
+  - name: save database checksum
+    copy:
+      dest: /tmp/rdnap_checksum.txt
+      content: '{{ stat_db.stat.checksum }}'
+    when: stat_db.stat.exists
+
+  - name: create database schema
+    mysql_db:
+      name: rdnap
+      state: present
+    when: stat_db.stat.exists
+    register: create_db
+
+  - name: import database
+    mysql_db:
+      name: rdnap
+      target: '{{ db_dump_file }}'
+      state: import
+    when: create_db.changed is defined and create_db.changed
+
+  - name: disable unix socket for mysql root user
+    command: mysql -e "UPDATE mysql.user SET plugin='' WHERE user='root'; flush privileges;"
+    when: create_db.changed is defined and create_db.changed
+
+  - name: adjust site table
+    command: mysql -e "UPDATE rdnap.wp_site SET domain='{{ item.domain }}' WHERE id={{ item.id }}"
+    with_items: '{{ multi_sites }}'
+    when: create_db.changed is defined and create_db.changed
+
+  - name: adjust blogs table
+    command: mysql -e "UPDATE rdnap.wp_blogs SET domain='{{ item.url }}' WHERE blog_id={{ item.id }}"
+    with_items: '{{ blogs }}'
+    when: create_db.changed is defined and create_db.changed
+
+  - name: adjust options tables
+    command: mysql -e "UPDATE rdnap.wp_{% if item.id != 1 %}{{ item.id }}_{% endif %}options SET option_value='http://{{ item.url }}' WHERE option_name IN ('home', 'siteurl')"
+    with_items: '{{ blogs }}'
+    when: create_db.changed is defined and create_db.changed
+
+#==============================================================================
+# RabbitMQ
+#==============================================================================
+
+  - name: add rabbitmq plugins
+    rabbitmq_plugin:
+      names: 'rabbitmq_management'
+      state: enabled
+
+  - name: add rabbitmq users
+    rabbitmq_user:
+      user: '{{ item.user }}'
+      password: '{{ item.password }}'
+      tags: '{{ item.tags }}'
+      vhost: '/'
+      configure_priv: '.*'
+      read_priv: '.*'
+      write_priv: '.*'
+    with_items:
+    - { user: 'vagrant', password: 'vagrant', tags: 'administrator' }
+    - { user: 'ubuntu', password: 'ubuntu', tags: 'administrator' }
+
+  - name: pull mq-resources project
+    git:
+      repo: git@github.com:ReadersDigest/mq-resources.git
+      dest: /opt/mq-resources
+      accept_hostkey: yes
+      force: yes
+      update: yes
+      key_file: '~/.ssh/mqresources_rsa'
+
+  - name: install composer dependencies
+    composer:
+      command: install
+      working_dir: /opt/mq-resources
+      no_dev: false
+
+  - name: save supervisor config for mq-worker
+    template:
+      src: '{{ item.src }}'
+      dest: '{{ item.dest }}'
+    become: yes
+    notify: restart supervisor
+    with_items:
+    - { src: 'rmq-mkeapi.conf', dest: '/etc/supervisor/conf.d/mkeapi.conf' }
+    - { src: 'rmq-recipes.conf', dest: '/etc/supervisor/conf.d/recipes.conf' }
+
+############################### Restart services ###############################
+  handlers:
+
+  - name: restart apache
+    service:
+      name: apache2
+      state: restarted
+
+  - name: restart mysql
+    service:
+      name: mysql
+      state: restarted
+
+  - name: restart supervisor
+    service:
+      name: supervisor
+      state: restarted
+
+###############################################################################
+- import_playbook: build-project.yml

@@ -1,0 +1,74 @@
+<VirtualHost *:80>
+    ServerAdmin root@localhost
+    ServerName {{ item.url }}
+    DocumentRoot {{ doc_root }}
+    DirectoryIndex index.php
+
+    SetEnv ENVIRONMENT vagrant
+    SetEnv DB_NAME rdnap
+    SetEnv DB_USER ubuntu
+    SetEnv DB_PASSWORD ubuntu
+    SetEnv DB_HOST localhost
+    SetEnv MULTISITE 1
+    SetEnv WP_DEBUG 1
+    SetEnv WP_DEBUG_DISPLAY 1
+
+    php_value date.timezone "America/Denver"
+    php_flag log_errors On
+    php_value error_reporting 32767
+    php_flag display_errors On
+    php_value error_log /var/log/php_error.log
+
+    <IfModule mod_headers.c>
+        Header append Vary Accept env=REDIRECT_accept
+    </IfModule>
+    AddType image/webp .webp
+
+    <Directory "{{ doc_root }}">
+        DirectoryIndex index.php
+        Options FollowSymLinks
+        AllowOverride None
+        Require all granted
+        <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteBase /
+
+            # Add Trailing Slash
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_URI} !^/?(wp-json) [NC]
+            RewriteCond %{REQUEST_URI} !\.(css|epub|gif|html|ico|jpe?g|js|mobi|pdf|php|png|rss|txt|xml)$ [NC]
+            RewriteRule ^(.*[^/])$ /$1/ [R=301,L]
+
+            # Rules for EWWW Image Optimizer
+            RewriteCond %{HTTP_ACCEPT} image/webp
+            RewriteCond %{REQUEST_FILENAME} (.*)\.(jpe?g|png)$
+            RewriteCond %{REQUEST_FILENAME}\.webp -f
+            RewriteRule (.+)\.(jpe?g|png)$ %{REQUEST_FILENAME}.webp [T=image/webp,E=accept:1]
+
+            # Standard WordPress Rules
+            RewriteRule ^index\.php$ - [L]
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . /index.php [L]
+        </IfModule>
+    </Directory>
+
+{% if item.image_domain is defined %}
+    <Directory {{ doc_root }}/wp-content/uploads>
+        <IfModule mod_rewrite.c>
+            RewriteEngine On
+            RewriteCond %{REQUEST_FILENAME} !-f
+{% if item.image_multisite|default(false) %}
+            # Retain the /site/#/ segments
+            RewriteRule ^(.+) {{ item.image_domain }}/wp-content/uploads/$1 [P,L]
+{% else %}
+            # Remove the /site/#/ sgements
+            RewriteRule ^(sites/\d+/)?(.+) {{ item.image_domain }}/wp-content/uploads/$2 [P,L]
+{% endif %}
+        </IfModule>
+    </Directory>
+{% endif %}
+
+    ErrorLog /var/log/apache2/error.{{ item.url }}.log
+    CustomLog /var/log/apache2/access.{{ item.url }}.log combined
+</VirtualHost>
