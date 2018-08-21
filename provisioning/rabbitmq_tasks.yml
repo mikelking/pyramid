@@ -1,0 +1,48 @@
+
+#==============================================================================
+# RabbitMQ
+#==============================================================================
+
+- name: add rabbitmq plugins
+  rabbitmq_plugin:
+    names: 'rabbitmq_management'
+    state: enabled
+
+- name: add rabbitmq users
+  rabbitmq_user:
+    user: '{{ item.user }}'
+    password: '{{ item.password }}'
+    tags: '{{ item.tags }}'
+    vhost: '/'
+    configure_priv: '.*'
+    read_priv: '.*'
+    write_priv: '.*'
+  with_items:
+  - { user: 'vagrant', password: 'vagrant', tags: 'administrator' }
+  - { user: 'ubuntu', password: 'ubuntu', tags: 'administrator' }
+
+- name: pull mq-resources project
+  git:
+    repo: git@github.com:ReadersDigest/mq-resources.git
+    dest: /opt/mq-resources
+    accept_hostkey: yes
+    force: yes
+    update: yes
+    key_file: '~/.ssh/mqresources_rsa'
+
+- name: install composer dependencies
+  composer:
+    command: install
+    working_dir: /opt/mq-resources
+    no_dev: false
+
+- name: save supervisor config for mq-worker
+  template:
+    src: '{{ item.src }}'
+    dest: '{{ item.dest }}'
+  become: yes
+  notify: restart supervisor
+  with_items:
+  - { src: 'rmq-mkeapi.conf', dest: '/etc/supervisor/conf.d/mkeapi.conf' }
+  - { src: 'rmq-recipes.conf', dest: '/etc/supervisor/conf.d/recipes.conf' }
+

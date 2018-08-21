@@ -1,0 +1,81 @@
+
+- name: add users to mysql
+  mysql_user:
+    user: '{{ item.username }}'
+    host: '%'
+    password: '{{ item.password }}'
+    encrypted: no
+    priv: '*.*:ALL,GRANT'
+    state: present
+  with_items: '{{ users }}'
+
+- name: create .my.cnf files
+  template:
+    src: my.conf
+    dest: /home/{{ item.username }}/.my.cnf
+  with_items: '{{ users }}'
+  when: "'vagrant' in group_names"
+
+- name: open access to mysql
+  lineinfile:
+    name: /etc/mysql/mariadb.conf.d/50-server.cnf
+    regexp: '^bind-address'
+    line: 'bind-address = 0.0.0.0'
+  notify: restart mysql
+  when: "'vagrant' in group_names"
+
+#------------------------------------------------------------------------------
+- name: stat checksum file
+  stat:
+    path: /tmp/rdnap_checksum.txt
+  register: stat_checksum
+
+- name: stat database dump
+  stat:
+    path: '{{ db_dump_file }}'
+  register: stat_db
+
+- name: drop database schema
+  mysql_db:
+    name: rdnap
+    state: absent
+  when: stat_checksum.stat.exists and stat_db.stat.exists and stat_db.stat.checksum != lookup('file', '/tmp/rdnap_checksum.txt')
+
+- name: save database checksum
+  copy:
+    dest: /tmp/rdnap_checksum.txt
+    content: '{{ stat_db.stat.checksum }}'
+  when: stat_db.stat.exists
+
+- name: create database schema
+  mysql_db:
+    name: rdnap
+    state: present
+  when: stat_db.stat.exists
+  register: create_db
+
+- name: import database
+  mysql_db:
+    name: rdnap
+    target: '{{ db_dump_file }}'
+    state: import
+  when: create_db.changed is defined and create_db.changed
+
+- name: disable unix socket for mysql root user
+  command: mysql -e "UPDATE mysql.user SET plugin='' WHERE user='root'; flush privileges;"
+  when: create_db.changed is defined and create_db.changed
+
+- name: adjust site table
+  command: mysql -e "UPDATE rdnap.wp_site SET domain='{{ item.domain }}' WHERE id={{ item.id }}"
+  with_items: '{{ multi_sites }}'
+  when: create_db.changed is defined and create_db.changed
+
+- name: adjust blogs table
+  command: mysql -e "UPDATE rdnap.wp_blogs SET domain='{{ item.url }}' WHERE blog_id={{ item.id }}"
+  with_items: '{{ blogs }}'
+  when: create_db.changed is defined and create_db.changed
+
+- name: adjust options tables
+  command: mysql -e "UPDATE rdnap.wp_{% if item.id != 1 %}{{ item.id }}_{% endif %}options SET option_value='http://{{ item.url }}' WHERE option_name IN ('home', 'siteurl')"
+  with_items: '{{ blogs }}'
+  when: create_db.changed is defined and create_db.changed

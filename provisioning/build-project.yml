@@ -4,7 +4,7 @@
   gather_facts: no
   force_handlers: yes
 
-###############################################################################
+  ###############################################################################
   vars:
 
     doc_root: /data/www/pyramid.local
@@ -12,21 +12,21 @@
     public_plugins:
     - { name: '', version: '' }
 
-###############################################################################
+  ###############################################################################
   tasks:
 
-#==============================================================================
-#  - name: update git sub-modules
-#    command: git submodule update --recursive --init
-#    args:
-#      chdir: '{{ project_path }}'
+  #==============================================================================
+  #  - name: update git sub-modules
+  #    command: git submodule update --recursive --init
+  #    args:
+  #      chdir: '{{ project_path }}'
 
   - name: create project directories
     file:
       dest: '{{ item }}'
       state: directory
     with_items:
-    - '{{ project_path }}/web/wp'
+    - '{{ project_path }}/wproot/'
 
   - name: check for auth.json
     stat:
@@ -43,7 +43,7 @@
   - name: install WordPress with wp-cli (fallback)
     command: wp core download --version="{{ wordpress_version }}" --allow-root
     args:
-      chdir: '{{ project_path }}/web/wp'
+      chdir: '{{ project_path }}/wproot/wordpress'
     register: install_wordpress
     changed_when: "'Error:' not in install_wordpress.stderr"
     failed_when: false
@@ -54,8 +54,8 @@
       name: '{{ item }}'
       state: absent
     with_items:
-    - '{{ project_path }}/web/wp/wp-content/plugins'
-    - '{{ project_path }}/web/wp/wp-content/themes'
+    - '{{ project_path }}/wproot/wordpress/wp-content/plugins'
+    - '{{ project_path }}/wproot/wordpress/wp-content/themes'
 
   - name: create internal directories
     file:
@@ -69,114 +69,31 @@
     - '{{ doc_root }}'
     - '{{ doc_root }}/wp-content/themes'
     - '{{ doc_root }}/wp-content/uploads'
-    - '/var/www/rdnap'
+    - '/var/www/pyramid.local'
 
-  - name: syncronize WordPress from project to vagrant
-    synchronize:
-      src: '{{ item.src }}'
-      dest: '{{ item.dest }}'
-      archive: no
-      recursive: yes
-      times: yes
-    become: yes
-    with_items:
-    - { src: '{{ project_path }}/web/wp/', dest: '{{ doc_root }}/' }
-    - { src: '{{ project_path }}/web/iframe-busters/', dest: '{{ doc_root }}/' }
+  #  - name: syncronize WordPress from project to vagrant
+  #    synchronize:
+  #      src: '{{ item.src }}'
+  #      dest: '{{ item.dest }}'
+  #      archive: no
+  #      recursive: yes
+  #      times: yes
+  #    become: yes
+  #    with_items:
+  #    - { src: '{{ project_path }}/web/wp/', dest: '{{ doc_root }}/' }
+  #    - { src: '{{ project_path }}/web/iframe-busters/', dest: '{{ doc_root }}/' }
 
-  - name: link from vagrant to project resources
-    file:
-      src: '{{ item.src }}'
-      dest: '{{ item.dest }}'
-      owner: www-data
-      force: yes
-      state: link
-    become: yes
-    with_items:
-    - { src: '{{ project_path | realpath }}/web/cfg/class_server_conf_finder.php', dest: '{{ doc_root }}/class_server_conf_finder.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg/cli-controller.php', dest: '{{ doc_root }}/cli-controller.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg/i.php', dest: '{{ doc_root }}/i.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg/server-conf-base.php', dest: '{{ doc_root }}/server-conf-base.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg{{ project_path }}-conf.php', dest: '{{ doc_root }}{{ project_path }}-conf.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg/wp-config.php', dest: '{{ doc_root }}/wp-config.php' }
-    - { src: '{{ project_path | realpath }}/web/cfg/vagrant-conf.php', dest: '{{ doc_root }}/vagrant-conf.php' }
-#    - { src: '{{ project_path }}/web/rda-config.php', dest: '{{ doc_root }}/rda-config.php' }
-#    - { src: '{{ project_path }}/web/wp-config.php', dest: '{{ doc_root }}/wp-config.php' }
-    - { src: '{{ project_path | realpath }}/web/app/plugins', dest: '{{ doc_root }}/wp-content/plugins' }
-    - { src: '{{ project_path | realpath }}/web/app/plugins/wordpress-mu-domain-mapping/sunrise.php', dest: '{{ doc_root }}/wp-content/sunrise.php' }
-    - { src: '{{ project_path | realpath }}/web/app/mu-plugins', dest: '{{ doc_root }}/wp-content/mu-plugins' }
-#    - { src: '{{ project_path | realpath }}/web/app/uploads', dest: '{{ doc_root }}/wp-content/uploads' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/altitude-pro', dest: '{{ doc_root }}/wp-content/themes/altitude-pro' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/fhm-theme', dest: '{{ doc_root }}/wp-content/themes/fhm-theme' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/genesis', dest: '{{ doc_root }}/wp-content/themes/genesis' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/magazine-pro', dest: '{{ doc_root }}/wp-content/themes/magazine-pro' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/news-pro', dest: '{{ doc_root }}/wp-content/themes/news-pro' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/rdca-child', dest: '{{ doc_root }}/wp-content/themes/rdca-child' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/rdnap/theme', dest: '{{ doc_root }}/wp-content/themes/rdnap' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/rdus-child', dest: '{{ doc_root }}/wp-content/themes/rdus-child' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/tmbi-master', dest: '{{ doc_root }}/wp-content/themes/tmbi-master' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/toh-theme', dest: '{{ doc_root }}/wp-content/themes/toh-theme' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/toh-theme-v2', dest: '{{ doc_root }}/wp-content/themes/toh-theme-v2' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/tmbi-theme-v3', dest: '{{ doc_root }}/wp-content/themes/tmbi-theme-v3' }
-    - { src: '{{ project_path | realpath }}/web/app/themes/wpdt', dest: '{{ doc_root }}/wp-content/themes/wpdt' }
+  # I suspect that this is no longer required for the vagrant since we are running the sites from
+  # withing the /vagrant share.
+  #  - name: link from vagrant to project resources
+  #    file:
+  #      src: '{{ item.src }}'
+  #      dest: '{{ item.dest }}'
+  #      owner: www-data
+  #      force: yes
+  #      state: link
+  #    become: yes
+  #    with_items:
+  #    - { src: '{{ project_path | realpath }}/wproot', dest: '{{ doc_root }}/wproot' }
 
-  - name: npm cache clean
-    command: npm cache clean --force
-    become: yes
-    args:
-      chdir: '{{ item }}'
-    with_items:
-    - '{{ project_path }}'
-    - '{{ project_path }}/externals/wp-forms-api'
-    - '{{ project_path }}/web/app/themes/rdnap'
-
-  - name: npm install
-    command: npm install --no-optional --no-bin-links
-    become: yes
-    args:
-      chdir: '{{ item }}'
-    with_items:
-    - '{{ project_path }}'
-    - '{{ project_path }}/externals/wp-forms-api'
-    - '{{ project_path }}/web/app/themes/rdnap'
-    ignore_errors: yes
-    register: npm_install
-
-#  - name: npm install again
-#    command: npm install --no-optional --no-bin-links
-#    args:
-#      chdir: '{{ item }}'
-#    with_items:
-#    - '{{ project_path }}'
-#    - '{{ project_path }}/externals/wp-forms-api'
-#    - '{{ project_path }}/web/app/themes/rdnap'
-#    ignore_errors: yes
-#    when: npm_install.failed is defined
-
-  - name: npm rebuild node-sass
-    command: npm rebuild node-sass --no-bin-links --no-optional
-    args:
-      chdir: '{{ item }}'
-    with_items:
-    - '{{ project_path }}'
-#    - '{{ project_path }}/externals/wp-forms-api'
-#    - '{{ project_path }}/web/app/themes/rdnap'
-
-  - name: run Gulp tasks
-    command: gulp
-    args:
-      chdir: '{{ item }}'
-    with_items:
-    - '{{ project_path }}'
-#    - '{{ project_path }}/externals/wp-forms-api'
-#    - '{{ project_path }}/web/app/themes/rdnap'
-    - '{{ project_path }}/web/app/themes/rdus-child'
-    - '{{ project_path }}/web/app/themes/toh-theme-v2'
-    - '{{ project_path }}/web/app/themes/tmbi-theme-v3'
-
-    ignore_errors: yes
-
-#  - name: clean up /tmp/gulp-ruby-sass
-#    file:
-#      path: /tmp/gulp-ruby-sass
-#     state: absent
-#    become: yes
+  - import_tasks: nodejs_tasks.yml

@@ -14,8 +14,9 @@
     - { username: 'vagrant', password: 'vagrant', hash: '$6$MASPkYql$i4NBItiAV9jrGoSTkpW.VHhK.VhFswC1sb6Jtu9Us.sB.XlBDKKTNtNl7uJ6RaRqLV4bhZkE5EFw9ea1pOKDN/'}
     - { username: 'ubuntu', password: 'ubuntu', hash: '$6$F0NHzeDW$N1kV3k5JERIKSUgZiQwqXlUq0yS8nhO16JmthwMkqk/Bh3SqJHQcJnr81TNTXpUQbPqI4eesmWezo5jMaO6XS/'}
 
-    doc_root: /data/www/pyramid.local
+    doc_root: /vagrant/wproot/wordpress/
     log_path: /vagrant/.logs
+    run_creds: vagrant
     multi_sites:
     - { id: 1, domain: 'pyramid.local' }
     blogs:
@@ -23,11 +24,9 @@
     - { id: 2, url: 'ocom.pyramid.local', image_domain: 'https://www.olivent.com/', image_multisite: true }
     - { id: 3, url: 'jafdip.pyramid.local', image_domain: 'https://www.jafdip.com/', image_multisite: true }
     - { id: 4, url: 'cm.pyramid.local', image_domain: 'https://www.team329.com/', image_multisite: true }
-    - { id: 5, url: 'frl.pyramid.local', image_domain: 'https://www.mikelking.com/', image_multisite: true }
-    - { id: 6, url: 'bnb.pyramid.local', image_domain: 'https://www.bsdnews.com/', image_multisite: true }
-    - { id: 7, url: 'bhu.pyramid.local', image_domain: 'https://blog.robowarsurvival.com', image_multisite: true }
-
-
+    - { id: 5, url: 'mk.pyramid.local', image_domain: 'https://www.mikelking.com/', image_multisite: true }
+    - { id: 6, url: 'bnn.pyramid.local', image_domain: 'https://www.bsdnews.com/', image_multisite: true }
+    - { id: 7, url: 'robo.pyramid.local', image_domain: 'https://blog.robowarsurvival.com', image_multisite: true }
 
 ############################### Deployment Keys ###############################
     deployment_keys:
@@ -314,65 +313,7 @@
 #==============================================================================
 # Apache
 #==============================================================================
-  - name: add available sites to apache
-    template:
-      src: vhost.apache
-      dest: /etc/apache2/sites-available/{{ item.url }}.conf
-    with_items: '{{ blogs }}'
-    notify: restart apache
-
-  - name: set default domain name
-    copy:
-      dest: '/etc/apache2/conf-available/fqdn.conf'
-      content: 'ServerName localhost'
-
-  - name: enable apache service
-    service:
-      name: apache2
-      enabled: yes
-      state: started
-
-  - name: install apache modules
-    apache2_module:
-      name: '{{ item }}'
-      state: present
-    with_items:
-    - proxy
-    - proxy_http
-    - rewrite
-    - vhost_alias
-
-  - name: disable default site
-    file:
-      dest: /etc/apache2/sites-enabled/000-default.conf
-      state: absent
-    notify: restart apache
-
-  - name: enable sites
-    file:
-      src: ../sites-available/{{ item.url }}.conf
-      dest: /etc/apache2/sites-enabled/{{ item.url }}.conf
-      force: yes
-      state: link
-    with_items: '{{ blogs }}'
-    notify: restart apache
-
-  - name: enable fqdn.conf
-    file:
-      src: ../conf-available/fqdn.conf
-      dest: /etc/apache2/conf-enabled/fqdn.conf
-      force: yes
-      state: link
-    notify: restart apache
-
-  - name: build hosts file
-    lineinfile:
-      dest: /etc/hosts
-      regexp: ^127.0.0.1 {{ item.url }}$
-      line: 127.0.0.1 {{ item.url }}
-      state: present
-    with_items: '{{ blogs }}'
-    when: "'vagrant' in group_names"
+  - import_tasks: apache_tasks.yml
 
 #==============================================================================
 # PHP
@@ -390,134 +331,11 @@
 #==============================================================================
 # MySQL
 #==============================================================================
-
-  - name: add users to mysql
-    mysql_user:
-      user: '{{ item.username }}'
-      host: '%'
-      password: '{{ item.password }}'
-      encrypted: no
-      priv: '*.*:ALL,GRANT'
-      state: present
-    with_items: '{{ users }}'
-
-  - name: create .my.cnf files
-    template:
-      src: my.conf
-      dest: /home/{{ item.username }}/.my.cnf
-    with_items: '{{ users }}'
-    when: "'vagrant' in group_names"
-
-  - name: open access to mysql
-    lineinfile:
-      name: /etc/mysql/mariadb.conf.d/50-server.cnf
-      regexp: '^bind-address'
-      line: 'bind-address = 0.0.0.0'
-    notify: restart mysql
-    when: "'vagrant' in group_names"
-
-#------------------------------------------------------------------------------
-  - name: stat checksum file
-    stat:
-      path: /tmp/rdnap_checksum.txt
-    register: stat_checksum
-
-  - name: stat database dump
-    stat:
-      path: '{{ db_dump_file }}'
-    register: stat_db
-
-  - name: drop database schema
-    mysql_db:
-      name: rdnap
-      state: absent
-    when: stat_checksum.stat.exists and stat_db.stat.exists and stat_db.stat.checksum != lookup('file', '/tmp/rdnap_checksum.txt')
-
-  - name: save database checksum
-    copy:
-      dest: /tmp/rdnap_checksum.txt
-      content: '{{ stat_db.stat.checksum }}'
-    when: stat_db.stat.exists
-
-  - name: create database schema
-    mysql_db:
-      name: rdnap
-      state: present
-    when: stat_db.stat.exists
-    register: create_db
-
-  - name: import database
-    mysql_db:
-      name: rdnap
-      target: '{{ db_dump_file }}'
-      state: import
-    when: create_db.changed is defined and create_db.changed
-
-  - name: disable unix socket for mysql root user
-    command: mysql -e "UPDATE mysql.user SET plugin='' WHERE user='root'; flush privileges;"
-    when: create_db.changed is defined and create_db.changed
-
-  - name: adjust site table
-    command: mysql -e "UPDATE rdnap.wp_site SET domain='{{ item.domain }}' WHERE id={{ item.id }}"
-    with_items: '{{ multi_sites }}'
-    when: create_db.changed is defined and create_db.changed
-
-  - name: adjust blogs table
-    command: mysql -e "UPDATE rdnap.wp_blogs SET domain='{{ item.url }}' WHERE blog_id={{ item.id }}"
-    with_items: '{{ blogs }}'
-    when: create_db.changed is defined and create_db.changed
-
-  - name: adjust options tables
-    command: mysql -e "UPDATE rdnap.wp_{% if item.id != 1 %}{{ item.id }}_{% endif %}options SET option_value='http://{{ item.url }}' WHERE option_name IN ('home', 'siteurl')"
-    with_items: '{{ blogs }}'
-    when: create_db.changed is defined and create_db.changed
-
+  - import_tasks: mysql_tasks.yml
 #==============================================================================
 # RabbitMQ
 #==============================================================================
-
-  - name: add rabbitmq plugins
-    rabbitmq_plugin:
-      names: 'rabbitmq_management'
-      state: enabled
-
-  - name: add rabbitmq users
-    rabbitmq_user:
-      user: '{{ item.user }}'
-      password: '{{ item.password }}'
-      tags: '{{ item.tags }}'
-      vhost: '/'
-      configure_priv: '.*'
-      read_priv: '.*'
-      write_priv: '.*'
-    with_items:
-    - { user: 'vagrant', password: 'vagrant', tags: 'administrator' }
-    - { user: 'ubuntu', password: 'ubuntu', tags: 'administrator' }
-
-  - name: pull mq-resources project
-    git:
-      repo: git@github.com:ReadersDigest/mq-resources.git
-      dest: /opt/mq-resources
-      accept_hostkey: yes
-      force: yes
-      update: yes
-      key_file: '~/.ssh/mqresources_rsa'
-
-  - name: install composer dependencies
-    composer:
-      command: install
-      working_dir: /opt/mq-resources
-      no_dev: false
-
-  - name: save supervisor config for mq-worker
-    template:
-      src: '{{ item.src }}'
-      dest: '{{ item.dest }}'
-    become: yes
-    notify: restart supervisor
-    with_items:
-    - { src: 'rmq-mkeapi.conf', dest: '/etc/supervisor/conf.d/mkeapi.conf' }
-    - { src: 'rmq-recipes.conf', dest: '/etc/supervisor/conf.d/recipes.conf' }
+  - import_tasks: rabbitmq_tasks.yml
 
 ############################### Restart services ###############################
   handlers:

@@ -1,0 +1,50 @@
+
+- name: npm cache clean
+  command: npm cache clean --force
+  become: yes
+  args:
+    chdir: '{{ item }}'
+  with_items:
+  - '{{ project_path }}'
+
+- name: npm install
+  command: npm install --no-optional --no-bin-links
+  become: yes
+  args:
+    chdir: '{{ item }}'
+  with_items:
+  - '{{ project_path }}'
+
+  ignore_errors: yes
+  register: npm_install
+
+#    - name: npm install again
+#      command: npm install --no-optional --no-bin-links
+#      args:
+#        chdir: '{{ item }}'
+#      with_items:
+#      - '{{ project_path }}'
+#      ignore_errors: yes
+#      when: npm_install.failed is defined
+
+- name: npm rebuild node-sass
+  command: npm rebuild node-sass --no-bin-links --no-optional
+  args:
+    chdir: '{{ item }}'
+  with_items:
+  - '{{ project_path }}'
+
+- name: run Gulp tasks
+  command: gulp
+  args:
+    chdir: '{{ item }}'
+  with_items:
+  - '{{ project_path }}/themes'
+
+  ignore_errors: yes
+
+#  - name: clean up /tmp/gulp-ruby-sass
+#    file:
+#      path: /tmp/gulp-ruby-sass
+#     state: absent
+#    become: yes
