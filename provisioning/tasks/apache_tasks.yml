@@ -1,0 +1,68 @@
+- name: setup apache environment
+  replace:
+    path: /etc/apache2/envvars
+    #regexp: '([^\s]+(?=\=(www-data))\=\2)'
+    regexp: 'www-data'
+    replace: 'vagrant'
+    backup: yes
+  notify: restart apache
+
+- name: add available sites to apache
+  template:
+    src: vhost.apache
+    dest: /etc/apache2/sites-available/{{ item.url }}.conf
+  with_items: '{{ blogs }}'
+  notify: restart apache
+
+- name: set default domain name
+  copy:
+    dest: '/etc/apache2/conf-available/fqdn.conf'
+    content: 'ServerName localhost'
+
+- name: enable apache service
+  service:
+    name: apache2
+    enabled: yes
+    state: started
+
+- name: install apache modules
+  apache2_module:
+    name: '{{ item }}'
+    state: present
+  with_items:
+  - proxy
+  - proxy_http
+  - rewrite
+  - vhost_alias
+
+- name: disable default site
+  file:
+    dest: /etc/apache2/sites-enabled/000-default.conf
+    state: absent
+  notify: restart apache
+
+- name: enable sites
+  file:
+    src: ../sites-available/{{ item.url }}.conf
+    dest: /etc/apache2/sites-enabled/{{ item.url }}.conf
+    force: yes
+    state: link
+  with_items: '{{ blogs }}'
+  notify: restart apache
+
+- name: enable fqdn.conf
+  file:
+    src: ../conf-available/fqdn.conf
+    dest: /etc/apache2/conf-enabled/fqdn.conf
+    force: yes
+    state: link
+  notify: restart apache
+
+- name: build hosts file
+  lineinfile:
+    dest: /etc/hosts
+    regexp: ^127.0.0.1 {{ item.url }}$
+    line: 127.0.0.1 {{ item.url }}
+    state: present
+  with_items: '{{ blogs }}'
+  when: "'vagrant' in group_names"
